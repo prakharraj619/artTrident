@@ -29,4 +29,10 @@ public class AuthenticationController {
             @RequestBody AuthenticationRequest request) {
         return ResponseEntity.ok(service.authenticate(request));
     }
+
+    @org.springframework.web.bind.annotation.GetMapping("/verify")
+    public ResponseEntity<String> verifyEmail(@org.springframework.web.bind.annotation.RequestParam("token") String token) {
+        service.verifyEmail(token);
+        return ResponseEntity.ok("Email verified successfully");
+    }
 }

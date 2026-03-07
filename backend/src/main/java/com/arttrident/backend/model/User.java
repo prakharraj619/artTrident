@@ -47,6 +47,10 @@ public class User implements UserDetails {
 
     private String profilePictureUrl;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean isVerified = false;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
