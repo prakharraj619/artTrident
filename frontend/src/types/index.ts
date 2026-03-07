@@ -1,0 +1,34 @@
+export interface User {
+    username: string;
+    email: string;
+    role: 'ARTIST' | 'COLLECTOR' | 'VIEWER' | 'ADMIN';
+}
+
+export interface AuthResponse {
+    token: string;
+}
+
+export interface Artwork {
+    id: number;
+    artistName: string;
+    artistProfileUrl?: string;
+    title: string;
+    medium: string;
+    description: string;
+    imageUrl: string;
+    price: number;
+    forSale: boolean;
+    createdAt: string;
+}
+
+export interface UserProfile {
+    username: string;
+    name?: string;
+    role: string;
+    status: string | null;
+    bio: string | null;
+    profilePictureUrl: string | null;
+    followerCount: number;
+    followingCount: number;
+    artworkCount: number;
+}
