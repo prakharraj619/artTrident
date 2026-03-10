@@ -14,15 +14,27 @@ export default function Register() {
     const navigate = useNavigate();
     const { login } = useAuth();
 
+    const [successMessage, setSuccessMessage] = useState('');
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setSuccessMessage('');
         setLoading(true);
 
         try {
             const response = await apiClient.post('/auth/register', { username, email, password, role });
-            login(response.data.token);
-            navigate('/');
+            
+            if (response.data.token === 'VERIFICATION_REQUIRED') {
+                setSuccessMessage('Account created! Please check your email to verify your account.');
+                // Clear form
+                setUsername('');
+                setEmail('');
+                setPassword('');
+            } else {
+                login(response.data.token);
+                navigate('/');
+            }
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to register. Please try another email or username.');
         } finally {
@@ -44,6 +56,11 @@ export default function Register() {
                 {error && (
                     <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm text-center font-medium">
                         {error}
+                    </div>
+                )}
+                {successMessage && (
+                    <div className="mb-4 p-4 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm text-center font-bold shadow-sm">
+                        {successMessage}
                     </div>
                 )}
 

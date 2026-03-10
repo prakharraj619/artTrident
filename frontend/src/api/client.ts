@@ -15,4 +15,22 @@ apiClient.interceptors.request.use((config) => {
     return config;
 });
 
+apiClient.interceptors.response.use(
+    (response) => {
+        return response;
+    },
+    (error) => {
+        if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+            // Token is likely expired or invalid
+            console.warn('[APIClient] 401/403 Unauthorized detected. Clearing token and redirecting to login.');
+            const hasToken = localStorage.getItem('token');
+            if (hasToken) {
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
 export default apiClient;

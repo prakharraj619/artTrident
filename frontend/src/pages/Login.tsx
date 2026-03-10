@@ -22,7 +22,12 @@ export default function Login() {
             login(response.data.token);
             navigate('/');
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to login. Please check your credentials.');
+            const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Failed to login. Please check your credentials.';
+            if (errorMessage.includes('USER_UNVERIFIED') || errorMessage.includes('User is disabled')) {
+                setError('Please check your email and verify your account before logging in.');
+            } else {
+                setError(errorMessage);
+            }
         } finally {
             setLoading(false);
         }
