@@ -7,14 +7,21 @@ import com.arttrident.backend.model.User;
 import com.arttrident.backend.repository.UserRepository;
 import com.arttrident.backend.security.JwtService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
+
+    // Toggle in application.properties: app.email-verification-enabled=true/false
+    @Value("${app.email-verification-enabled:false}")
+    private boolean emailVerificationEnabled;
 
     private final UserRepository repository;
     private final com.arttrident.backend.repository.VerificationTokenRepository tokenRepository;
@@ -40,29 +47,42 @@ public class AuthenticationService {
 
         var savedUser = repository.save(user);
 
-        // Generate Verification Token
-        String token = java.util.UUID.randomUUID().toString();
-        var verificationToken = com.arttrident.backend.model.VerificationToken.builder()
-                .token(token)
-                .user(savedUser)
-                .expiryDate(java.time.LocalDateTime.now().plusHours(24))
-                .build();
-        tokenRepository.save(verificationToken);
+        if (emailVerificationEnabled) {
+            // Generate Verification Token and send email
+            String token = java.util.UUID.randomUUID().toString();
+            var verificationToken = com.arttrident.backend.model.VerificationToken.builder()
+                    .token(token)
+                    .user(savedUser)
+                    .expiryDate(java.time.LocalDateTime.now().plusHours(24))
+                    .build();
+            tokenRepository.save(verificationToken);
 
-        // Send Email
-        String verificationUrl = "http://localhost:5173/verify?token=" + token;
-        emailService.sendVerificationEmail(savedUser.getEmail(), savedUser.getUsername(), verificationUrl);
+            String verificationUrl = "http://localhost:5173/verify?token=" + token;
+            emailService.sendVerificationEmail(savedUser.getEmail(), savedUser.getUsername(), verificationUrl);
 
-        return AuthenticationResponse.builder()
-                .token("VERIFICATION_REQUIRED") // Signal to frontend that email verify is needed
-                .build();
+            log.info("Verification email sent to {}", savedUser.getEmail());
+            return AuthenticationResponse.builder()
+                    .token("VERIFICATION_REQUIRED") // Signal to frontend that email verify is needed
+                    .build();
+        } else {
+            // Dev mode: auto-verify user and return a real JWT immediately
+            log.warn("Email verification is DISABLED. Auto-verifying user: {}", savedUser.getEmail());
+            savedUser.setVerified(true);
+            repository.save(savedUser);
+
+            var jwtToken = jwtService.generateToken(savedUser);
+            return AuthenticationResponse.builder()
+                    .token(jwtToken)
+                    .build();
+        }
     }
 
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         var user = repository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid email or password."));
 
-        if (!user.isVerified()) {
+        // Only block unverified users when email verification is actually enabled
+        if (emailVerificationEnabled && !user.isVerified()) {
             throw new IllegalStateException("USER_UNVERIFIED");
         }
 
@@ -70,7 +90,7 @@ public class AuthenticationService {
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(),
                         request.getPassword()));
-        
+
         var jwtToken = jwtService.generateToken(user);
         return AuthenticationResponse.builder()
                 .token(jwtToken)
