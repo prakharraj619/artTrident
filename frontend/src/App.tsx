@@ -8,6 +8,7 @@ import Upload from './pages/Upload';
 import ArtistProfile from './pages/ArtistProfile';
 import SavedArtworks from './pages/SavedArtworks';
 import ActivityFeed from './pages/ActivityFeed';
+import Messages from './pages/Messages';
 
 function App() {
   return (
@@ -38,6 +39,11 @@ function App() {
       <Route path="/activities" element={
         <ProtectedRoute>
           <ActivityFeed />
+        </ProtectedRoute>
+      } />
+      <Route path="/messages" element={
+        <ProtectedRoute>
+          <Messages />
         </ProtectedRoute>
       } />
     </Routes>

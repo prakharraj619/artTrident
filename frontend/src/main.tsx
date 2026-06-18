@@ -4,12 +4,16 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
+import { ChatProvider } from './context/ChatContext.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        {/* ChatProvider must be inside AuthProvider so it can access the JWT token */}
+        <ChatProvider>
+          <App />
+        </ChatProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

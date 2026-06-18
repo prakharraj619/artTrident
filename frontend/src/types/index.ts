@@ -32,3 +32,26 @@ export interface UserProfile {
     followingCount: number;
     artworkCount: number;
 }
+
+// ─── Messaging Types (mirrors Java DTOs) ──────────────────────────────────────
+
+export interface MessageResponse {
+    id: number;
+    conversationId: number;
+    senderId: number;
+    senderUsername: string;
+    senderAvatarUrl: string | null;
+    content: string;
+    sentAt: string;
+    isRead: boolean;
+}
+
+export interface ConversationResponse {
+    id: number;
+    otherUserId: number;
+    otherUsername: string;
+    otherUserAvatarUrl: string | null;
+    lastMessageContent: string | null;
+    lastMessageAt: string;
+    unreadCount: number;
+}
