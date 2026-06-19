@@ -3,8 +3,15 @@ import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import apiClient from '../api/client';
 import type { ConversationResponse, MessageResponse } from '../types';
-import { Send, MessageSquare, Wifi, WifiOff, User } from 'lucide-react';
+import { Send, MessageSquare, Wifi, WifiOff, User, PenSquare, X, Search } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+
+interface UserSummary {
+  id: number;
+  username: string;
+  profilePictureUrl: string | null;
+  role: string;
+}
 
 // ─── Avatar helper ────────────────────────────────────────────────────────────
 function Avatar({ url, username, size = 'md' }: { url?: string | null; username: string; size?: 'sm' | 'md' | 'lg' }) {
@@ -29,9 +36,14 @@ export default function Messages() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
 
+  // New message picker state
+  const [showNewMessage, setShowNewMessage] = useState(false);
+  const [people, setPeople] = useState<UserSummary[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoadingPeople, setIsLoadingPeople] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to the latest message
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
@@ -44,6 +56,24 @@ export default function Messages() {
       .finally(() => setIsLoadingConversations(false));
   }, []);
 
+  // Load followers + following when "New Message" panel opens
+  useEffect(() => {
+    if (!showNewMessage || !user) return;
+    setIsLoadingPeople(true);
+
+    // Fetch both followers and following, then merge and deduplicate
+    Promise.all([
+      apiClient.get<UserSummary[]>(`/users/${user.username}/followers`),
+      apiClient.get<UserSummary[]>(`/users/${user.username}/following`),
+    ]).then(([followersRes, followingRes]) => {
+      const all = [...followersRes.data, ...followingRes.data];
+      // Deduplicate by id
+      const unique = all.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
+      setPeople(unique);
+    }).catch(console.error)
+      .finally(() => setIsLoadingPeople(false));
+  }, [showNewMessage, user]);
+
   // Load messages when a conversation is selected
   useEffect(() => {
     if (!selectedConversation) return;
@@ -51,7 +81,6 @@ export default function Messages() {
     apiClient.get<{ content: MessageResponse[] }>(`/messages/conversations/${selectedConversation.id}/messages`)
       .then(res => {
         setMessages(res.data.content);
-        // Mark conversation as read in the sidebar
         setConversations(prev => prev.map(c =>
           c.id === selectedConversation.id ? { ...c, unreadCount: 0 } : c
         ));
@@ -60,36 +89,40 @@ export default function Messages() {
       .finally(() => setIsLoadingMessages(false));
   }, [selectedConversation]);
 
-  // Auto scroll when messages change
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
-  // Handle incoming real-time messages from WebSocket
+  // Handle real-time incoming messages
   useEffect(() => {
     if (!incomingMessage) return;
-
-    // If the message belongs to the currently open conversation, add it to the thread
     if (selectedConversation && incomingMessage.conversationId === selectedConversation.id) {
       setMessages(prev => {
-        // Avoid duplicate messages (server sends back to sender too)
         if (prev.some(m => m.id === incomingMessage.id)) return prev;
         return [...prev, incomingMessage];
       });
     }
-
-    // Update the conversation sidebar's last message preview
     setConversations(prev => prev.map(c => {
       if (c.id === incomingMessage.conversationId) {
         const isCurrentlyOpen = selectedConversation?.id === c.id;
-        return {
-          ...c,
-          lastMessageContent: incomingMessage.content,
-          lastMessageAt: incomingMessage.sentAt,
-          unreadCount: isCurrentlyOpen ? 0 : c.unreadCount + 1,
-        };
+        return { ...c, lastMessageContent: incomingMessage.content, lastMessageAt: incomingMessage.sentAt, unreadCount: isCurrentlyOpen ? 0 : c.unreadCount + 1 };
       }
       return c;
     }).sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()));
   }, [incomingMessage, selectedConversation]);
+
+  // Start a new conversation with someone from the people picker
+  const handleStartConversation = async (person: UserSummary) => {
+    try {
+      const res = await apiClient.post<ConversationResponse>(`/messages/conversations/${person.id}`);
+      const conv = res.data;
+      // Add to list if not already there
+      setConversations(prev => prev.some(c => c.id === conv.id) ? prev : [conv, ...prev]);
+      setSelectedConversation(conv);
+      setShowNewMessage(false);
+      setSearchQuery('');
+    } catch (err) {
+      console.error('Failed to start conversation', err);
+    }
+  };
 
   const handleSend = () => {
     if (!inputText.trim() || !selectedConversation) return;
@@ -98,11 +131,12 @@ export default function Messages() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
+
+  const filteredPeople = people.filter(p =>
+    p.username.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 
@@ -117,23 +151,95 @@ export default function Messages() {
             <MessageSquare className="w-5 h-5 text-sky-500" />
             <h1 className="font-semibold text-neutral-900 text-lg">Messages</h1>
             {totalUnread > 0 && (
-              <span className="bg-sky-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                {totalUnread}
-              </span>
+              <span className="bg-sky-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{totalUnread}</span>
             )}
           </div>
-          {/* Connection indicator */}
-          <div className={`flex items-center gap-1.5 text-xs font-medium ${isConnected ? 'text-emerald-500' : 'text-rose-400'}`}>
-            {isConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
-            {isConnected ? 'Live' : 'Offline'}
+          <div className="flex items-center gap-3">
+            {/* Connection dot */}
+            <div className={`flex items-center gap-1.5 text-xs font-medium ${isConnected ? 'text-emerald-500' : 'text-rose-400'}`}>
+              {isConnected ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+              {isConnected ? 'Live' : 'Offline'}
+            </div>
+            {/* New message button */}
+            <button
+              id="new-message-btn"
+              onClick={() => setShowNewMessage(v => !v)}
+              title="New Message"
+              className="w-8 h-8 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-600 flex items-center justify-center transition-colors"
+            >
+              <PenSquare className="w-4 h-4" />
+            </button>
           </div>
         </div>
+
+        {/* ── New Message People Picker ──────────────────────────── */}
+        {showNewMessage && (
+          <div className="border-b border-neutral-100 bg-sky-50/50">
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold text-neutral-600 uppercase tracking-wide">Start a Conversation</p>
+              <button onClick={() => { setShowNewMessage(false); setSearchQuery(''); }} className="text-neutral-400 hover:text-neutral-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Search box */}
+            <div className="px-4 pb-2">
+              <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-xl px-3 py-2">
+                <Search className="w-3.5 h-3.5 text-neutral-400 flex-shrink-0" />
+                <input
+                  id="people-search"
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search followers & following..."
+                  className="flex-1 text-xs bg-transparent outline-none text-neutral-800 placeholder:text-neutral-400"
+                  autoFocus
+                />
+              </div>
+            </div>
+            {/* People list */}
+            <div className="max-h-52 overflow-y-auto">
+              {isLoadingPeople ? (
+                <div className="px-4 py-3 space-y-2">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="flex items-center gap-3 animate-pulse">
+                      <div className="w-8 h-8 rounded-full bg-neutral-200" />
+                      <div className="h-3 bg-neutral-200 rounded w-28" />
+                    </div>
+                  ))}
+                </div>
+              ) : filteredPeople.length === 0 ? (
+                <div className="px-4 py-4 text-center">
+                  <p className="text-xs text-neutral-400">
+                    {people.length === 0
+                      ? "You have no followers or following yet. Follow some artists first!"
+                      : "No results found"}
+                  </p>
+                </div>
+              ) : (
+                filteredPeople.map(person => (
+                  <button
+                    key={person.id}
+                    id={`start-chat-${person.id}`}
+                    onClick={() => handleStartConversation(person)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white transition-colors text-left"
+                  >
+                    <Avatar url={person.profilePictureUrl} username={person.username} size="sm" />
+                    <div>
+                      <p className="text-sm font-medium text-neutral-800">{person.username}</p>
+                      <p className="text-[10px] text-neutral-400 capitalize">{person.role.toLowerCase()}</p>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Conversation list */}
         <div className="flex-1 overflow-y-auto">
           {isLoadingConversations ? (
             <div className="p-4 space-y-3">
-              {[1,2,3].map(i => (
+              {[1, 2, 3].map(i => (
                 <div key={i} className="flex items-center gap-3 p-2 animate-pulse">
                   <div className="w-10 h-10 rounded-full bg-neutral-100" />
                   <div className="flex-1 space-y-1.5">
@@ -149,7 +255,9 @@ export default function Messages() {
                 <MessageSquare className="w-7 h-7 text-neutral-400" />
               </div>
               <p className="text-sm font-medium text-neutral-700">No messages yet</p>
-              <p className="text-xs text-neutral-400 mt-1">Visit an artist's profile and click "Message"</p>
+              <p className="text-xs text-neutral-400 mt-1">
+                Click the <PenSquare className="w-3 h-3 inline" /> button above to message someone you follow
+              </p>
             </div>
           ) : (
             conversations.map(conv => (
@@ -190,7 +298,6 @@ export default function Messages() {
       {/* ── Chat Panel ──────────────────────────────────────────────────── */}
       {selectedConversation ? (
         <div className="flex-1 flex flex-col">
-          {/* Chat Header */}
           <div className="px-6 py-4 bg-white border-b border-neutral-200 flex items-center gap-3 shadow-sm">
             <Avatar url={selectedConversation.otherUserAvatarUrl} username={selectedConversation.otherUsername} size="lg" />
             <div>
@@ -199,7 +306,6 @@ export default function Messages() {
             </div>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
             {isLoadingMessages ? (
               <div className="flex items-center justify-center h-full">
@@ -219,12 +325,9 @@ export default function Messages() {
                 return (
                   <div key={msg.id} className={`flex items-end gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
                     {!isOwn && <Avatar url={msg.senderAvatarUrl} username={msg.senderUsername} size="sm" />}
-                    <div className={`max-w-[65%] group`}>
+                    <div className="max-w-[65%]">
                       <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm
-                        ${isOwn
-                          ? 'bg-sky-500 text-white rounded-br-sm'
-                          : 'bg-white text-neutral-800 border border-neutral-200 rounded-bl-sm'
-                        }`}>
+                        ${isOwn ? 'bg-sky-500 text-white rounded-br-sm' : 'bg-white text-neutral-800 border border-neutral-200 rounded-bl-sm'}`}>
                         {msg.content}
                       </div>
                       <p className={`text-[10px] text-neutral-400 mt-1 ${isOwn ? 'text-right' : 'text-left'}`}>
@@ -238,7 +341,6 @@ export default function Messages() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Bar */}
           <div className="px-6 py-4 bg-white border-t border-neutral-200">
             <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 rounded-2xl px-4 py-2 focus-within:border-sky-400 focus-within:ring-2 focus-within:ring-sky-100 transition-all">
               <textarea
@@ -260,21 +362,18 @@ export default function Messages() {
               </button>
             </div>
             {!isConnected && (
-              <p className="text-xs text-rose-400 mt-2 text-center">
-                Reconnecting to real-time server...
-              </p>
+              <p className="text-xs text-rose-400 mt-2 text-center">Reconnecting to real-time server...</p>
             )}
           </div>
         </div>
       ) : (
-        // Empty state when no conversation is selected
         <div className="flex-1 flex flex-col items-center justify-center text-center bg-neutral-50">
           <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-sky-100 to-teal-100 flex items-center justify-center mb-5 shadow-inner">
             <User className="w-10 h-10 text-sky-500" />
           </div>
           <h2 className="text-xl font-semibold text-neutral-800">Your Messages</h2>
           <p className="text-neutral-400 text-sm mt-2 max-w-xs">
-            Select a conversation from the left, or visit an artist's profile to start a new one.
+            Select a conversation from the left, or click the <PenSquare className="w-3.5 h-3.5 inline" /> button to message someone you follow.
           </p>
         </div>
       )}

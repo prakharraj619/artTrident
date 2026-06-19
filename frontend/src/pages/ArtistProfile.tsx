@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import type { UserProfile, Artwork } from '../types';
 import ArtworkCard from '../components/ArtworkCard';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
-import { UserPlus, UserCheck, Edit3 } from 'lucide-react';
+import { UserPlus, UserCheck, Edit3, MessageSquare } from 'lucide-react';
 import EditProfileModal from '../components/EditProfileModal';
 
 const ArtistProfile = () => {
     const { username } = useParams<{ username: string }>();
     const { isAuthenticated, user } = useAuth();
+    const navigate = useNavigate();
 
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [artworks, setArtworks] = useState<Artwork[]>([]);
@@ -19,6 +20,7 @@ const ArtistProfile = () => {
 
     const [isFollowing, setIsFollowing] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
+    const [messageLoading, setMessageLoading] = useState(false);
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -101,6 +103,23 @@ const ArtistProfile = () => {
         }
     };
 
+    const handleMessageClick = async () => {
+        if (!profile) return;
+        setMessageLoading(true);
+        try {
+            // Find user id first via search
+            const searchRes = await apiClient.get<Array<{ id: number; username: string }>>(`/users/search?q=${encodeURIComponent(profile.username)}`);
+            const match = searchRes.data.find(u => u.username === profile.username);
+            if (!match) return;
+            await apiClient.post(`/messages/conversations/${match.id}`);
+            navigate('/messages');
+        } catch (err) {
+            console.error('Failed to open message', err);
+        } finally {
+            setMessageLoading(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex justify-center items-center h-screen bg-neutral-50 text-neutral-600">
@@ -158,29 +177,40 @@ const ArtistProfile = () => {
                                 </button>
                             ) : (
                                 isAuthenticated && (
-                                    <button
-                                        onClick={handleFollowToggle}
-                                        disabled={actionLoading}
-                                        className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-bold transition-all duration-300 transform hover:-translate-y-1
-                    ${isFollowing
-                                                ? 'bg-neutral-900 text-white hover:bg-neutral-800 shadow-md'
-                                                : 'bg-white text-neutral-900 border border-neutral-200 hover:bg-neutral-50 shadow-sm hover:shadow-md'
-                                            } disabled:opacity-50 disabled:cursor-not-allowed mx-auto md:mx-0`}
-                                    >
-                                        {actionLoading ? (
-                                            <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                                        ) : isFollowing ? (
-                                            <>
-                                                <UserCheck className="w-5 h-5" />
-                                                Following
-                                            </>
-                                        ) : (
-                                            <>
-                                                <UserPlus className="w-5 h-5" />
-                                                Follow
-                                            </>
-                                        )}
-                                    </button>
+                                    <div className="flex items-center gap-3 mx-auto md:mx-0">
+                                        {/* Follow button */}
+                                        <button
+                                            onClick={handleFollowToggle}
+                                            disabled={actionLoading}
+                                            className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-bold transition-all duration-300 transform hover:-translate-y-1
+                        ${isFollowing
+                                                    ? 'bg-neutral-900 text-white hover:bg-neutral-800 shadow-md'
+                                                    : 'bg-white text-neutral-900 border border-neutral-200 hover:bg-neutral-50 shadow-sm hover:shadow-md'
+                                                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                        >
+                                            {actionLoading ? (
+                                                <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                                            ) : isFollowing ? (
+                                                <><UserCheck className="w-5 h-5" />Following</>
+                                            ) : (
+                                                <><UserPlus className="w-5 h-5" />Follow</>
+                                            )}
+                                        </button>
+
+                                        {/* Message button */}
+                                        <button
+                                            id={`message-btn-${username}`}
+                                            onClick={handleMessageClick}
+                                            disabled={messageLoading}
+                                            className="flex items-center gap-2 px-6 py-2.5 rounded-full font-bold bg-sky-500 text-white hover:bg-sky-600 shadow-md hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 disabled:opacity-50"
+                                        >
+                                            {messageLoading ? (
+                                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            ) : (
+                                                <><MessageSquare className="w-5 h-5" />Message</>
+                                            )}
+                                        </button>
+                                    </div>
                                 )
                             )}
                         </div>

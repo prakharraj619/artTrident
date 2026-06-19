@@ -98,18 +98,20 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                     if (authHeader != null && authHeader.startsWith("Bearer ")) {
                         String jwt = authHeader.substring(7);
                         try {
-                            String userEmail = jwtService.extractUsername(jwt);
-                            var userDetails = userRepository.findByEmail(userEmail)
+                            // extractUsername() returns the JWT subject, which is set to the username
+                            // (see JwtService.buildToken — .subject(userDetails.getUsername()))
+                            // We must match the same lookup strategy as ApplicationConfig.userDetailsService()
+                            String subject = jwtService.extractUsername(jwt);
+                            var userDetails = userRepository.findByEmail(subject)
+                                    .or(() -> userRepository.findByUsername(subject))
                                     .orElseThrow(() -> new RuntimeException("User not found"));
 
                             if (jwtService.isTokenValid(jwt, userDetails)) {
-                                // Set the authenticated user on the WebSocket session
-                                // This is identical to what JwtAuthenticationFilter does for HTTP
                                 var authToken = new UsernamePasswordAuthenticationToken(
                                         userDetails, null, userDetails.getAuthorities());
                                 SecurityContextHolder.getContext().setAuthentication(authToken);
                                 accessor.setUser(authToken);
-                                log.info("WebSocket authenticated for user: {}", userEmail);
+                                log.info("WebSocket authenticated for user: {}", userDetails.getUsername());
                             }
                         } catch (Exception e) {
                             log.error("WebSocket JWT authentication failed: {}", e.getMessage());
