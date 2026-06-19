@@ -4,6 +4,7 @@ import com.arttrident.backend.dto.AuthenticationRequest;
 import com.arttrident.backend.dto.AuthenticationResponse;
 import com.arttrident.backend.dto.RegisterRequest;
 import com.arttrident.backend.service.AuthenticationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,7 +21,7 @@ public class AuthenticationController {
 
     @PostMapping("/register")
     public ResponseEntity<AuthenticationResponse> register(
-            @RequestBody RegisterRequest request) {
+            @Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.ok(service.register(request));
     }
 

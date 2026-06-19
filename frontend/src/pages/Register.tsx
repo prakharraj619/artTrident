@@ -20,14 +20,23 @@ export default function Register() {
         e.preventDefault();
         setError('');
         setSuccessMessage('');
-        setLoading(true);
 
+        // Client-side validation
+        if (username.length < 3 || username.length > 30) {
+            setError('Username must be between 3 and 30 characters.');
+            return;
+        }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+            setError('Username can only contain letters, numbers, and underscores (no spaces).');
+            return;
+        }
+
+        setLoading(true);
         try {
             const response = await apiClient.post('/auth/register', { username, email, password, role });
             
             if (response.data.token === 'VERIFICATION_REQUIRED') {
                 setSuccessMessage('Account created! Please check your email to verify your account.');
-                // Clear form
                 setUsername('');
                 setEmail('');
                 setPassword('');
@@ -81,6 +90,8 @@ export default function Register() {
                         <label className="block text-sm font-bold text-neutral-700 mb-1">Username</label>
                         <input
                             type="text"
+                            name="username"
+                            autoComplete="username"
                             required
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
@@ -92,6 +103,8 @@ export default function Register() {
                         <label className="block text-sm font-bold text-neutral-700 mb-1">Email</label>
                         <input
                             type="email"
+                            name="email"
+                            autoComplete="email"
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
@@ -103,6 +116,8 @@ export default function Register() {
                         <label className="block text-sm font-bold text-neutral-700 mb-1">Password</label>
                         <input
                             type="password"
+                            name="new-password"
+                            autoComplete="new-password"
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
