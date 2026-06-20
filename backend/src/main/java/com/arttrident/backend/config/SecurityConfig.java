@@ -34,7 +34,12 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/auth/**",
                                 "/api/v1/public/**",
-                                "/ws/**",            // WebSocket handshake endpoint
+                                "/api/v1/artworks/**",
+                                "/api/v1/users/search",
+                                "/api/v1/users/*/followers",
+                                "/api/v1/users/*/following",
+                                "/api/v1/users/*",
+                                "/ws/**",
                                 "/v2/api-docs",
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",

@@ -33,7 +33,7 @@ export interface UserProfile {
     artworkCount: number;
 }
 
-// ─── Messaging Types (mirrors Java DTOs) ──────────────────────────────────────
+// ─── Messaging Types ───────────────────────────────────────────────────────────
 
 export interface MessageResponse {
     id: number;
@@ -54,4 +54,16 @@ export interface ConversationResponse {
     lastMessageContent: string | null;
     lastMessageAt: string;
     unreadCount: number;
+}
+
+// ─── Comment Types ─────────────────────────────────────────────────────────────
+
+export interface CommentResponse {
+    id: number;
+    artworkId: number;
+    authorId: number;
+    authorUsername: string;
+    authorAvatarUrl: string | null;
+    content: string;
+    createdAt: string;
 }
